@@ -1,151 +1,166 @@
 #include <panel.h>
 
-typedef struct{
-    bool resized, moved;
-    int x, y, w, h;
-    char label[256];
-    int label_color;
-    PANEL *next;
+typedef struct _PANEL_DATA {
+	int x, y, w, h;
+	char label[80]; 
+	int label_color;
+	PANEL *next;
 }PANEL_DATA;
 
+#define NLINES 10
+#define NCOLS 40
+
+
+void init_wins(WINDOW **wins, int n)
+{	int x, y, i;
+	char label[80];
+
+	y = 2;
+	x = 10;
+	for(i = 0; i < n; ++i)
+	{	wins[i] = newwin(NLINES, NCOLS, y, x);
+		sprintf(label, "Window Number %d", i + 1);
+		win_show(wins[i], label, i + 1);
+		y += 3;
+		x += 7;
+	}
+}
+void win_show(WINDOW *win, char *label, int label_color);
+void print_in_middle(WINDOW *win, int starty, int startx, int width, char *string, chtype color);
+void set_user_ptrs(PANEL **panels, int n);
 
 int main()
 {	WINDOW *my_wins[3];
-	WINDOW *old_wins, *new_wins;
 	PANEL  *my_panels[3];
-	PANEL_DATA *top, *stack_top;
-	
-	int newx, newy, newh, neww;
-	int lines = 10, cols = 40, y = 2, x = 4, i;
-    int ch; 
+	PANEL_DATA  *top;
+	PANEL *stack_top;
+	WINDOW *temp_win, *old_win;
+	int ch;
+	int newx, newy, neww, newh;
+	int resize = FALSE, move = FALSE;
 
+	/* Initialize curses */
 	initscr();
-    start_color();
+	start_color();
 	cbreak();
 	noecho();
-    keypad(stdscr, TRUE);
+	keypad(stdscr, TRUE);
 
-	/* Create windows for the panels */
-	my_wins[0] = newwin(lines, cols, y, x);
-	my_wins[1] = newwin(lines, cols, y + 1  , x + 5);
-	my_wins[2] = newwin(lines, cols, y + 2, x + 10);
 
-    init_pair(1, COLOR_RED, COLOR_BLACK);
+	init_pair(1, COLOR_RED, COLOR_BLACK);
 	init_pair(2, COLOR_GREEN, COLOR_BLACK);
 	init_pair(3, COLOR_BLUE, COLOR_BLACK);
 	init_pair(4, COLOR_CYAN, COLOR_BLACK);
 
-	for(i = 0; i < 3; ++i)
-		box(my_wins[i], ACS_DIAMOND, '-');
-
-
+	init_wins(my_wins, 3);
+	
+	/* Attach a panel to each window */ 	/* Order is bottom up */
 	my_panels[0] = new_panel(my_wins[0]); 	/* Push 0, order: stdscr-0 */
 	my_panels[1] = new_panel(my_wins[1]); 	/* Push 1, order: stdscr-0-1 */
 	my_panels[2] = new_panel(my_wins[2]); 	/* Push 2, order: stdscr-0-1-2 */
 
-    set_panel_userptr(my_panels[0], my_panels[1]);
-    set_panel_userptr(my_panels[1], my_panels[2]);
-    set_panel_userptr(my_panels[2], my_panels[0]);
-
+	set_user_ptrs(my_panels, 3);
+	/* Update the stacking order. 2nd panel will be on top */
 	update_panels();
 
-    attron(COLOR_PAIR(4));
-    mvprintw(LINES - 2, 0, "use tab to browsse through panels");
-    mvprintw(LINES - 3, 0, "Press m to move the panels");
-    attroff(COLOR_PAIR(4));
-	/* Show it on the screen */
-	refresh();
-	
-	stack_top =  my_panels[2];
-	top  =  (PANEL*)panel_userptr(stack_top);
+	attron(COLOR_PAIR(4));
+	mvprintw(LINES - 3, 0, "Use 'm' for moving, 'r' for resizing");
+	mvprintw(LINES - 2, 0, "Use tab to browse through the windows (F1 to Exit)");
+	attroff(COLOR_PAIR(4));
+	doupdate();
+
+	stack_top = my_panels[2];
+	top = (PANEL_DATA *)panel_userptr(stack_top);
 	newx = top->x;
 	newy = top->y;
-	newh = top->h;
 	neww = top->w;
-
-	while((ch = getch()) != KEY_BACKSPACE)
-	{
-		switch(ch)
-		{
-			case 9:
-				top = (PANEL*)panel_userptr(top);
-				top_panel(top);
+	newh = top->h;
+	while((ch = getch()) != KEY_F(1))
+	{	switch(ch)
+		{	case 9:		/* Tab */
+				top = (PANEL_DATA *)panel_userptr(stack_top);
+				top_panel(top->next);
+				stack_top = top->next;
+				top = (PANEL_DATA *)panel_userptr(stack_top);
+				newx = top->x;
+				newy = top->y;
+				neww = top->w;
+				newh = top->h;
 				break;
-			
-			case 'r':
-				if(top->moved)
-					top->moved = false;
-				top->resized = true;
+			case 'r':	/* Re-resize*/
+				resize = TRUE;
 				attron(COLOR_PAIR(4));
-			    mvprintw(LINES - 4, 0, "Press r to resize the panels");
+				mvprintw(LINES - 4, 0, "Entered Resizing :Use Arrow Keys to reresize and press <ENTER> to end resizing");
 				refresh();
 				attroff(COLOR_PAIR(4));
 				break;
-
-			case 'm':
-				if(top->resized)
-					top->resized = false;
-				top->moved = true;
+			case 'm':	/* Move */
 				attron(COLOR_PAIR(4));
-			    mvprintw(LINES - 4, 0, "Press m to move the panels");
+				mvprintw(LINES - 4, 0, "Entered Moving: Use Arrow Keys to Move and press <ENTER> to end moving");
 				refresh();
 				attroff(COLOR_PAIR(4));
+				move = TRUE;
 				break;
-
-			case KEY_RIGHT:
-				if(top->resized){
-					newx++;
-					neww--;
-				}
-				if(top->moved){
-					newx++;
-				}
 			case KEY_LEFT:
-				if(top->resized){
-					newx--;
-					neww++;
+				if(resize == TRUE)
+				{	--newx;
+					++neww;
 				}
-				if(top->moved){
-					newx--;
+				if(move == TRUE)
+					--newx;
+				break;
+			case KEY_RIGHT:
+				if(resize == TRUE)
+				{	++newx;
+					--neww;
 				}
-
+				if(move == TRUE)
+					++newx;
+				break;
 			case KEY_UP:
-				if(top->resized){
-					newy++;
-					newh--;
+				if(resize == TRUE)
+				{	--newy;
+					++newh;
 				}
-				if(top->moved){
-					newy++;
-				}
+				if(move == TRUE)
+					--newy;
+				break;
 			case KEY_DOWN:
-				if(top->resized){
-					newy--;
-					newh++;
+				if(resize == TRUE)
+				{	++newy;
+					--newh;
 				}
-				if(top->moved){
-					newy--;
+				if(move == TRUE)
+					++newy;
+				break;
+			case 10:	/* Enter */
+				move(LINES - 4, 0);
+				clrtoeol();
+				refresh();
+				if(resize == TRUE)
+				{	old_win = panel_window(stack_top);
+					temp_win = newwin(newh, neww, newy, newx);
+					replace_panel(stack_top, temp_win);
+					win_show(temp_win, top->label, top->label_color); 
+					delwin(old_win);
+					resize = FALSE;
 				}
+				if(move == TRUE)
+				{	move_panel(stack_top, newy, newx);
+					move = FALSE;
+				}
+				break;
 			
-			case 10:
-				if(top->resized){
-					attron(COLOR_PAIR(4));
-					mvprintw(LINES - 4, 0, "RESIZING WAS SUCCESSFUL");
-					attroff(COLOR_PAIR(4));
-					top->resized = false;
-
-				}
-				if(top->moved){
-					attron(COLOR_PAIR(4));
-					mvprintw(LINES - 4, 0, "MOVED WAS SUCCESSFULY");
-					attroff(COLOR_PAIR(4));
-					top->moved = false;
-
-				}
-
 		}
+		attron(COLOR_PAIR(4));
+		mvprintw(LINES - 3, 0, "Use 'm' for moving, 'r' for resizing");
+	    	mvprintw(LINES - 2, 0, "Use tab to browse through the windows (F1 to Exit)");
+	    	attroff(COLOR_PAIR(4));
+	        refresh();	
 		update_panels();
 		doupdate();
 	}
 	endwin();
 	return 0;
 }
+
