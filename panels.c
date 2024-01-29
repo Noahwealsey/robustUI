@@ -25,9 +25,66 @@ void init_wins(WINDOW **wins, int n)
 		x += 7;
 	}
 }
-void win_show(WINDOW *win, char *label, int label_color);
-void print_in_middle(WINDOW *win, int starty, int startx, int width, char *string, chtype color);
-void set_user_ptrs(PANEL **panels, int n);
+void set_user_ptrs(PANEL **panels, int n){
+	int x,y,h,w;
+	char temp[80];
+	PANEL_DATA *ptrs;
+	WINDOW *win;
+
+	ptrs = (PANEL_DATA*)calloc(n, sizeof(PANEL_DATA));
+	for (int i = 0; i < n; i++)
+	{
+		win = panel_window(panels[i]);
+		getbeg(win, y, x);
+		getmax(win, h, w);
+		ptrs[i].x = x;
+		ptrs[i].y = y;
+		ptrs[i].w = w;
+		ptrs[i].h = h;	
+		sprintf(temp, "WINDOW NUMBER %d", i + 1);
+		strcpy(ptrs[i].label, temp);
+		if(i + 1 == n){
+			ptrs[i].next = panels[0];
+		}
+		else{
+			ptrs[i].next = panels[i];
+		}
+
+	}
+	
+
+}
+void print_in_middle(WINDOW *win, int starty, int startx, int width, char *string, chtype colorIndex){
+	int x, y, h, w;
+
+	getyx(win, y, x);
+	if(startx != 0){
+		x = startx;
+	}
+	if(starty != 0){
+		y = starty;
+	}
+
+	int len = strlen(string);
+	int temp = (width - len)/2;
+	x = startx + (int)temp;
+	wattron(win, colorIndex);
+	mvprintw(y, x, "window number %s", string);
+	wattroff(win, colorIndex);
+	refresh();
+}
+
+void win_show(WINDOW *win, char *label, int label_color){	
+	int width, height, startx, starty;
+
+	box(win, 0, 0);
+	mvwaddch(win, 2, 0, ACS_LTEE); 
+	mvwhline(win, 2, 1, ACS_HLINE, width - 2); 
+	mvwaddch(win, 2, width - 1, ACS_RTEE); 
+	
+	print_in_middle(win, 1, 0, width, label, COLOR_PAIR(label_color));
+
+}
 
 int main()
 {	WINDOW *my_wins[3];
