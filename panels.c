@@ -13,7 +13,7 @@ typedef struct _PANEL_DATA {
 #define NCOLS 40
 
 void print_in_middle(WINDOW *win, int starty, int startx, int width, char *string, chtype colorIndex){
-	int x, y, h, w;
+	int x, y;
 
 	getyx(win, y, x);
 	if(startx != 0){
@@ -24,7 +24,7 @@ void print_in_middle(WINDOW *win, int starty, int startx, int width, char *strin
 	}
 
 	int len = strlen(string);
-	int temp = (width - len)/2;
+	float temp = (width - len)/2;
 	x = startx + (int)temp;
 	wattron(win, colorIndex);
 	mvprintw(y, x, "window number %s", string);
@@ -34,7 +34,9 @@ void print_in_middle(WINDOW *win, int starty, int startx, int width, char *strin
 
 
 void win_show(WINDOW *win, char *label, int label_color){	
-	int width, height, startx, starty;
+	int width, height;
+
+	getmaxyx(win, height, width);
 
 	box(win, 0, 0);
 	mvwaddch(win, 2, 0, ACS_LTEE); 
@@ -76,13 +78,14 @@ void set_user_ptrs(PANEL **panels, int n){
 		ptrs[i].h = h;	
 		sprintf(temp, "WINDOW NUMBER %d", i + 1);
 		strcpy(ptrs[i].label, temp);
+		ptrs[i].label_color = i + 1;
 		if(i + 1 == n){
 			ptrs[i].next = panels[0];
 		}
 		else{
-			ptrs[i].next = panels[i];
+			ptrs[i].next = panels[i + 1];
 		}
-
+		set_panel_userptr(panels[i], &ptrs[i]);
 	}
 	
 
